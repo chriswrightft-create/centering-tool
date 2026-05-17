@@ -52,6 +52,49 @@ def get_canvas_enhancement_script(
           const upperCanvas = doc.querySelector("canvas.upper-canvas");
           if (!upperCanvas) return;
           const lowerCanvas = doc.querySelector("canvas.lower-canvas");
+          // Streamlit Cloud often fails to load /media/ URLs inside the drawable-canvas iframe.
+          // The zoom lens already uses this JPEG data URL; paint the same image on the background layer.
+          const resolveBackgroundCanvas = () => {
+            const byId = doc.getElementById("backgroundimage-canvas");
+            if (byId && byId.width && byId.height) return byId;
+            const drawableContainer = upperCanvas.closest(".canvas-container");
+            const candidates = Array.from(doc.querySelectorAll("canvas")).filter((node) => {
+              if (node === upperCanvas || node === lowerCanvas) return false;
+              if (drawableContainer && drawableContainer.contains(node)) return false;
+              return node.width > 0 && node.height > 0;
+            });
+            return candidates.length ? candidates[0] : null;
+          };
+          const paintDrawableBackground = (loadedImage) => {
+            if (!sourceImageUrl) return;
+            const backgroundCanvas = resolveBackgroundCanvas();
+            if (!backgroundCanvas) return;
+            const backgroundContext = backgroundCanvas.getContext("2d");
+            if (!backgroundContext) return;
+            const drawLoadedImage = (imageNode) => {
+              try {
+                backgroundContext.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+                backgroundContext.drawImage(
+                  imageNode,
+                  0,
+                  0,
+                  backgroundCanvas.width,
+                  backgroundCanvas.height,
+                );
+              } catch (error) {}
+            };
+            if (loadedImage && loadedImage.complete && loadedImage.naturalWidth > 0) {
+              drawLoadedImage(loadedImage);
+              return;
+            }
+            const backgroundImage = new Image();
+            backgroundImage.onload = () => drawLoadedImage(backgroundImage);
+            backgroundImage.src = sourceImageUrl;
+          };
+          paintDrawableBackground(null);
+          [80, 220, 420, 700, 1200].forEach((delayMs) => {
+            window.setTimeout(() => paintDrawableBackground(null), delayMs);
+          });
           const applyCursorStyle = (cursorValue) => {
             let resolvedCursor = "none";
             if (cursorValue === "default") resolvedCursor = "default";
@@ -96,6 +139,7 @@ def get_canvas_enhancement_script(
           }
           window.__lineMarkToolbarObserver = new MutationObserver(() => {
             hideToolbarControls();
+            paintDrawableBackground(null);
           });
           window.__lineMarkToolbarObserver.observe(doc.body, { childList: true, subtree: true });
 
@@ -216,6 +260,7 @@ def get_canvas_enhancement_script(
           const providedImage = new Image();
           providedImage.src = sourceImageUrl;
           providedImage.onload = () => {
+            paintDrawableBackground(providedImage);
             const zoom = zoomFactor;
             const radius = 30;
             const getCanvasPoint = (clientX, clientY, targetRect) => ({

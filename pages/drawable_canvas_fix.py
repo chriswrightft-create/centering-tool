@@ -12,6 +12,10 @@ invalid URL and yields a **blank canvas**, so data URLs are **off by default**.
 
 Set ``GRADING_DRAWABLE_CANVAS_DATA_URL=1`` (or ``true`` / ``on``) to opt into the
 experimental data URL path (not recommended on current Streamlit + drawable-canvas).
+
+On Streamlit Community Cloud, ``pages/line_mark_canvas_js.py`` also paints the same
+JPEG data URL used for the zoom lens onto the drawable-canvas background layer when
+``/media/`` URLs fail inside the component iframe.
 """
 
 from __future__ import annotations
