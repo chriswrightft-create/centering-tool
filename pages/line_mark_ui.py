@@ -187,9 +187,9 @@ def render_result_summary(result) -> None:
         (
             "<div style='text-align:center;'>"
             f"<div style='font-size:30px;font-weight:700;line-height:1.1;'>"
-            f"L/R {result.left_right_ratio[0]}%/{result.left_right_ratio[1]}%</div>"
+            f"L/R {result.left_right_ratio[0]:.2f}%/{result.left_right_ratio[1]:.2f}%</div>"
             f"<div style='font-size:30px;font-weight:700;line-height:1.1;margin-top:8px;'>"
-            f"T/B {result.top_bottom_ratio[0]}%/{result.top_bottom_ratio[1]}%</div>"
+            f"T/B {result.top_bottom_ratio[0]:.2f}%/{result.top_bottom_ratio[1]:.2f}%</div>"
             "</div>"
         ),
         unsafe_allow_html=True,
