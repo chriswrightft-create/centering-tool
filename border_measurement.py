@@ -14,8 +14,8 @@ class BorderRatios:
     right_px: int
     top_px: int
     bottom_px: int
-    left_right_ratio: Tuple[int, int]
-    top_bottom_ratio: Tuple[int, int]
+    left_right_ratio: Tuple[float, float]
+    top_bottom_ratio: Tuple[float, float]
     in_45_55_range: bool
 
 
@@ -28,10 +28,10 @@ class BorderAnalysisDebug:
     inner_bottom_y: int
 
 
-def _ratio_pair(first_value: int, second_value: int) -> Tuple[int, int]:
+def _ratio_pair(first_value: int, second_value: int) -> Tuple[float, float]:
     total = max(first_value + second_value, 1)
-    first_percent = int(round((first_value / total) * 100))
-    return first_percent, 100 - first_percent
+    first_percent = round((first_value / total) * 100, 2)
+    return first_percent, round(100 - first_percent, 2)
 
 
 def _smooth(values: np.ndarray) -> np.ndarray:
