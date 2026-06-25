@@ -21,7 +21,7 @@ def get_canvas_enhancement_script(
       const styleId = "line-mark-crosshair-style";
       const css = `
         html, body { cursor: default; }
-        canvas, .upper-canvas, .lower-canvas, .canvas-container { cursor: none !important; }
+        canvas, .upper-canvas, .lower-canvas, .canvas-container { cursor: none !important; touch-action: none; }
         [class*="CanvasToolbar_"] { display: none !important; }
         button[aria-label*="undo" i], button[aria-label*="redo" i], button[aria-label*="delete" i], button[title*="Undo"], button[title*="Redo"], button[title*="Delete"] { display: none !important; }
         button, [role="button"] { color: #f3f4f6 !important; opacity: 1 !important; }
@@ -747,6 +747,102 @@ def get_canvas_enhancement_script(
               applyCursorStyle("default");
               cursorOverlay.style.display = "none";
             };
+
+            // Touch support: map touch events to the same mouse/pointer handlers.
+            // On touchstart we show the zoom panel at the finger position so the user
+            // can see exactly where the point will land before lifting their finger.
+            // On touchend we commit the point (or drag) at the final touch position.
+            // We suppress the default browser behaviour (scroll, zoom) while a finger
+            // is inside the canvas so the page doesn't scroll mid-mark.
+            let touchActive = false;
+            let lastTouchClientX = 0;
+            let lastTouchClientY = 0;
+            const getTouchCoords = (event) => {
+              const touch = event.changedTouches[0] || event.touches[0];
+              if (!touch) return null;
+              return { clientX: touch.clientX, clientY: touch.clientY };
+            };
+            const isTouchOnCanvas = (clientX, clientY) => {
+              const targetRect = upperCanvas.getBoundingClientRect();
+              return (
+                clientX >= targetRect.left &&
+                clientX <= targetRect.right &&
+                clientY >= targetRect.top &&
+                clientY <= targetRect.bottom
+              );
+            };
+            window.__lineMarkTouchStartHandler = (event) => {
+              if (synthesizingPointPlacement) return;
+              const coords = getTouchCoords(event);
+              if (!coords) return;
+              if (!isTouchOnCanvas(coords.clientX, coords.clientY)) return;
+              // Prevent scroll/pinch while the user is marking points on the canvas.
+              event.preventDefault();
+              touchActive = true;
+              lastTouchClientX = coords.clientX;
+              lastTouchClientY = coords.clientY;
+              // Show the zoom lens at the touch point so the user can position precisely.
+              drawAt(coords.clientX, coords.clientY);
+              // Synthesise a mousedown so drag-detection can arm if touching a known point.
+              const syntheticDown = {
+                clientX: coords.clientX,
+                clientY: coords.clientY,
+                preventDefault: () => {},
+                stopPropagation: () => {},
+              };
+              window.__lineMarkDownHandler(syntheticDown);
+            };
+            window.__lineMarkTouchMoveHandler = (event) => {
+              if (synthesizingPointPlacement || !touchActive) return;
+              const coords = getTouchCoords(event);
+              if (!coords) return;
+              event.preventDefault();
+              lastTouchClientX = coords.clientX;
+              lastTouchClientY = coords.clientY;
+              // Update the zoom panel as the finger moves so users can fine-position.
+              drawAt(coords.clientX, coords.clientY);
+              // Drive the drag logic the same as mouse move.
+              window.__lineMarkMoveHandler({ clientX: coords.clientX, clientY: coords.clientY });
+            };
+            window.__lineMarkTouchEndHandler = (event) => {
+              if (synthesizingPointPlacement || !touchActive) return;
+              touchActive = false;
+              const coords = getTouchCoords(event) || { clientX: lastTouchClientX, clientY: lastTouchClientY };
+              event.preventDefault();
+              // Commit: synthesise a mouseup at the final touch position.
+              handlePointerRelease({ clientX: coords.clientX, clientY: coords.clientY });
+              // Hide the zoom panel a moment after the finger lifts.
+              window.setTimeout(() => {
+                sidePanel.style.display = "none";
+                cursorOverlay.style.display = "none";
+              }, 600);
+            };
+            const prevTouchStart = window.__lineMarkPrevTouchStart;
+            const prevTouchMove = window.__lineMarkPrevTouchMove;
+            const prevTouchEnd = window.__lineMarkPrevTouchEnd;
+            if (prevTouchStart) {
+              doc.removeEventListener("touchstart", prevTouchStart, true);
+              upperCanvas.removeEventListener("touchstart", prevTouchStart, { passive: false });
+            }
+            if (prevTouchMove) {
+              doc.removeEventListener("touchmove", prevTouchMove, true);
+              upperCanvas.removeEventListener("touchmove", prevTouchMove, { passive: false });
+            }
+            if (prevTouchEnd) {
+              doc.removeEventListener("touchend", prevTouchEnd, true);
+              upperCanvas.removeEventListener("touchend", prevTouchEnd, { passive: false });
+            }
+            window.__lineMarkPrevTouchStart = window.__lineMarkTouchStartHandler;
+            window.__lineMarkPrevTouchMove = window.__lineMarkTouchMoveHandler;
+            window.__lineMarkPrevTouchEnd = window.__lineMarkTouchEndHandler;
+            // Attach at the canvas level (not passive) so preventDefault() works.
+            upperCanvas.addEventListener("touchstart", window.__lineMarkTouchStartHandler, { passive: false, capture: true });
+            upperCanvas.addEventListener("touchmove", window.__lineMarkTouchMoveHandler, { passive: false, capture: true });
+            upperCanvas.addEventListener("touchend", window.__lineMarkTouchEndHandler, { passive: false, capture: true });
+            // Also catch touches that start inside but drift outside the canvas element.
+            doc.addEventListener("touchmove", window.__lineMarkTouchMoveHandler, { passive: false, capture: true });
+            doc.addEventListener("touchend", window.__lineMarkTouchEndHandler, { passive: false, capture: true });
+
             doc.addEventListener("mousemove", window.__lineMarkMoveHandler, true);
             doc.addEventListener("pointermove", window.__lineMarkPointerMoveHandler, true);
             doc.addEventListener("mousedown", window.__lineMarkDownHandler, true);
