@@ -29,10 +29,12 @@ import streamlit_drawable_canvas as drawable_module
 from pages.streamlit_canvas_image import png_data_url_for_drawable_canvas
 
 _original_st_canvas = drawable_module.st_canvas
-_component_func = drawable_module._component_func
-_resize_img = drawable_module._resize_img
-_data_url_to_image = drawable_module._data_url_to_image
-CanvasResult = drawable_module.CanvasResult
+# These private hooks existed in streamlit-drawable-canvas 0.9.x. Starting with
+# 0.10.0 the package uses Components v2 and handles data URLs publicly.
+_component_func = getattr(drawable_module, "_component_func", None)
+_resize_img = getattr(drawable_module, "_resize_img", None)
+_data_url_to_image = getattr(drawable_module, "_data_url_to_image", None)
+_canvas_result_type = getattr(drawable_module, "CanvasResult", Any)
 
 
 def prefer_data_url_background() -> bool:
@@ -54,7 +56,7 @@ def _st_canvas_data_url_background(
     display_toolbar: bool = True,
     point_display_radius: int = 3,
     key=None,
-) -> CanvasResult:
+) -> Any:
     background_image_url = None
     if background_image is not None:
         resized = _resize_img(background_image, height, width)
@@ -80,16 +82,18 @@ def _st_canvas_data_url_background(
         default=None,
     )
     if component_value is None:
-        return CanvasResult
+        return _canvas_result_type
 
-    return CanvasResult(
+    return _canvas_result_type(
         np.asarray(_data_url_to_image(component_value["data"])),
         component_value["raw"],
     )
 
 
-def st_canvas(*args: Any, **kwargs: Any) -> CanvasResult:
-    if prefer_data_url_background():
+def st_canvas(*args: Any, **kwargs: Any) -> Any:
+    if prefer_data_url_background() and all(
+        hook is not None for hook in (_component_func, _resize_img, _data_url_to_image)
+    ):
         return _st_canvas_data_url_background(*args, **kwargs)
     return _original_st_canvas(*args, **kwargs)
 
