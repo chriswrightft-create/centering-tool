@@ -21,6 +21,7 @@ JPEG data URL used for the zoom lens onto the drawable-canvas background layer w
 from __future__ import annotations
 
 import os
+import inspect
 from typing import Any, Optional
 
 import numpy as np
@@ -95,6 +96,8 @@ def st_canvas(*args: Any, **kwargs: Any) -> Any:
         hook is not None for hook in (_component_func, _resize_img, _data_url_to_image)
     ):
         return _st_canvas_data_url_background(*args, **kwargs)
+    if "display_toolbar" not in inspect.signature(_original_st_canvas).parameters:
+        kwargs.pop("display_toolbar", None)
     return _original_st_canvas(*args, **kwargs)
 
 
